@@ -1,0 +1,28 @@
+# ============================================================
+# Gestor de Variables – SESNA
+# Dependencias con versiones fijadas para Python 3.12
+# Compatibilidad garantizada: numpy 1.26.x + pandas 2.2.x
+# ============================================================
+
+# ---------- Web / Flask ----------
+Flask==3.0.3
+Flask-Login==0.6.3
+Flask-Compress==1.17
+Werkzeug==3.0.3
+
+# ---------- Túnel público ----------
+pyngrok==7.2.0
+
+# ---------- Backend / Datos ----------
+supabase==2.7.4
+
+# ---------- Ciencia de datos / ML ----------
+# ⚠️ IMPORTANTE: numpy 1.26.4 (rama 1.x) es OBLIGATORIO para que pandas
+#    y scikit-learn funcionen sin errores de ABI en Python 3.12.
+numpy==1.26.4
+pandas==2.2.2
+scikit-learn==1.4.2
+scipy==1.13.1
+
+# ---------- Utilidades ----------
+python-dotenv==1.0.1
