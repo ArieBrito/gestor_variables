@@ -4,7 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// En Netlify la función se empaqueta como CJS (import.meta.url no existe): la raíz es LAMBDA_TASK_ROOT.
+export const ROOT_DIR = import.meta.url
+  ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  : process.env.LAMBDA_TASK_ROOT || process.cwd();
 
 const truthy = (v, def = false) => (v === undefined || v === '' ? def : ['1', 'true', 'yes', 'on'].includes(String(v).toLowerCase()));
 
