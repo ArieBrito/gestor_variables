@@ -1,0 +1,7 @@
+.env
+node_modules/
+modelos/
+*.log
+.deps_installed
+venv/
+__pycache__/

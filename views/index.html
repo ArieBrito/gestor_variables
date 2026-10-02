@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Variables</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/app.css">
+    <link rel="stylesheet" href="/static/css/theme.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=block" rel="stylesheet">
+</head>
+<body>
+
+
+<!-- BARRA DE CABECERA CON BOTÓN DE MENÚ, MODO OSCURO Y MENÚ DE USUARIO -->
+<div class='header-bar'>
+    <div style='display:flex; align-items:center; gap:16px;'>
+        <button id="menuToggleBtn" aria-label="Abrir menú">
+            <span class="menu-line"></span>
+            <span class="menu-line"></span>
+            <span class="menu-line"></span>
+        </button>
+        <div class='brand'>
+            <img class='brand-logo' src='/static/img/logotipo_sesna.svg' alt='SESNA · Sistema Nacional Anticorrupción'>
+            <h1>Gestor de Variables</h1>
+        </div>
+    </div>
+    <div style='display:flex; align-items:center; gap:12px;'>
+        <div class="user-menu-wrapper">
+            <span id='currentUsername' style='font-size:0.9rem;'>Usuario</span>
+            <button id="userDropdownBtn" onclick="toggleUserMenu()">
+                <span class="arrow">▼</span>
+            </button>
+            <div class="user-dropdown-menu" id="userDropdownMenu">
+                <a onclick="changeOwnPassword()">🔑 Cambiar contraseña</a>
+                <hr>
+                <a href="/logout">🚪 Cerrar sesión</a>
+            </div>
+        </div>
+        <div id='status-indicator' style='font-size:0.8em;' title='El sistema está funcionando'>● Conectado</div>
+        <button id="darkModeToggle" onclick="toggleDarkMode()" title="Cambiar modo oscuro/claro">🌙</button>
+    </div>
+</div>
+<!-- Sidebar -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<div class="sidebar" id="sidebar">
+    <div class="close-sidebar" id="closeSidebarBtn">&times;</div>
+    <div class="sidebar-header">Navegación</div>
+    <a class="sidebar-item active" data-view="variables" onclick="switchView('variables', this)">📊 Variables</a>
+    <a class="sidebar-item" data-view="users" onclick="switchView('users', this)">👥 Usuarios</a>
+    <a class="sidebar-item" data-view="history" onclick="switchView('history', this)">🕘 Cargas</a>
+</div>
+
+<!-- ========== VISTA: VARIABLES ========== -->
+<div id="view-variables" class="view-container active">
+    <div class='tool-panel'>
+        <div class='search-wrapper'>
+            <div class='search-input-group'>
+                <input type='text' id='searchInput'
+                    placeholder='Buscar por nombre, institución, año…'
+                    onkeydown='handleSearchKeydown(event)'>
+                <button class='btn btn-tool' onclick='triggerSearch()'
+                    title='Buscar' type='button'>🔍</button>
+            </div>
+        </div>
+
+        <div class='button-group'>
+            <div class='tool-group'>
+                <span class='tool-group-label'>1 · Agregar datos</span>
+                <div class='tool-group-actions'>
+                    <button class='btn btn-action' onclick='openModal("modalConfirmUpload")' title='Sube un archivo CSV con variables'>📤 Subir archivo CSV</button>
+                    <button class='btn btn-tool' onclick="openModal('modalFolderUpload')" title='Sube una carpeta comprimida (.zip) del INEGI'>📁 Subir carpeta ZIP</button>
+                    <button class='btn btn-tool' onclick='confirmAddRow()' title='Crea una variable vacía para llenarla a mano'>➕ Nueva variable</button>
+                </div>
+            </div>
+            <div class='tool-group'>
+                <span class='tool-group-label'>2 · Con las filas marcadas</span>
+                <div class='tool-group-actions'>
+                    <button class='btn btn-tool' onclick='duplicateSelected()' title='Hace una copia de las filas marcadas'>📋 Duplicar</button>
+                    <button class='btn btn-danger' onclick='deleteSelectedRows()' title='Borra las filas marcadas'>🗑 Eliminar</button>
+                </div>
+            </div>
+            <div class='tool-group'>
+                <span class='tool-group-label'>3 · Guardar una copia</span>
+                <div class='tool-group-actions'>
+                    <button class='btn btn-tool' onclick='downloadCSV()' title='Descarga todas las variables en un archivo CSV'>📥 Descargar CSV</button>
+                </div>
+            </div>
+            <details class='advanced'>
+                <summary>⚙️ Opciones avanzadas</summary>
+                <div class='advanced-menu'>
+                    <div class='advanced-item'>
+                        <button class='btn btn-tool' onclick='retrainModels()'>🔄 Mejorar sugerencias automáticas</button>
+                        <p>Reentrena el modelo que sugiere Proceso, Eje y Tema con los datos ya clasificados.</p>
+                    </div>
+                    <div class='advanced-item'>
+                        <button class='btn btn-outline' onclick='rollbackModels()'>↩️ Volver a las sugerencias anteriores</button>
+                        <p>Si las sugerencias empeoraron, restaura la versión previa del modelo.</p>
+                    </div>
+                    <div class='advanced-item danger'>
+                        <button class='btn btn-danger' onclick='deleteAllData()'>🗑️ Eliminar TODOS los datos</button>
+                        <p>Borra todas las variables. No se puede deshacer.</p>
+                    </div>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <div class='hint-bar'>
+        <span>💡 <b>Editar:</b> haz clic en una celda y escribe.</span>
+        <span><b>Marcar:</b> usa las casillas de la izquierda.</span>
+        <span><b>Ver detalle:</b> pulsa la flecha a la izquierda de una fila para ver sus filas hijas.</span>
+        <span><b>Subir ZIP:</b> también puedes arrastrarlo a la tabla.</span>
+    </div>
+
+    <div class='table-card' id='dropZone'>
+        <div class='table-wrapper'>
+            <table id='dataTable'>
+                <thead>
+                    <tr id='headerRow'>
+                        <th style='width:30px; min-width:30px; max-width:30px; text-align:center;'></th>
+                        <th style='width:40px; min-width:40px; max-width:40px; text-align:center;'></th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="drop-edge-hint drop-edge-top">Suelta en esta area para convertir en Padre</div>
+        <div class="drop-edge-hint drop-edge-bottom">Suelta en esta area convertir en Padre</div>
+        <div class='table-pagination'>
+            <button onclick='prevPage()' id='prevPageBtnTable'>Anterior</button>
+            <span>
+                Página <input type='number' id='pageInput' value='1' min='1' onchange='goToPage(this.value)'>
+                de <span id='totalPagesSpan'>1</span>
+            </span>
+            <select id='itemsPerPageSelect' onchange='changeItemsPerPage(this.value)'>
+                <option value='10'>10</option>
+                <option value='25'>25</option>
+                <option value='50'>50</option>
+                <option value='100'>100</option>
+            </select>
+            <span id="pageInfo">Mostrando 0 padres de 0</span>
+            <button onclick='nextPage()' id='nextPageBtnTable'>Siguiente</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========== VISTA: USUARIOS ========== -->
+<div id="view-users" class="view-container">
+    <div style="background: var(--panel-bg); border-radius: 8px; border: 1px solid var(--border); padding: 20px; margin-top: 24px;">
+
+        <!-- Cabecera con botón Editar -->
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+            <h2 style="margin:0; color: var(--text-main);">👥 Gestión de Usuarios</h2>
+            <div style="display:flex; gap:8px;">
+                <button id="userEditToggleBtn" class="btn btn-outline" onclick="toggleUserEditMode()" title="Editar usuarios">
+                    <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    <span id="userEditToggleLabel">Editar</span>
+                </button>
+                <button id="userEditCancelBtn" class="btn btn-danger" onclick="cancelUserEdits()" style="display:none;">✕ Cancelar</button>
+            </div>
+        </div>
+
+        <!-- Formulario para agregar usuario -->
+        <div style='display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;'>
+            <input type='text' id='newUsername' name='new_user_field' autocomplete='off' autocapitalize='off' spellcheck='false' placeholder='Usuario' style='flex: 1; min-width: 120px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel-bg); color: var(--text-main);'>
+            <div class='password-field-wrapper' style='flex: 1; min-width: 120px;'>
+                <input type='password' id='newPassword' name='new_pass_field' autocomplete='new-password' placeholder='Contraseña (mín 6)'
+                       style='padding: 8px 40px 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel-bg); color: var(--text-main); width: 100%; box-sizing: border-box;'>
+                <button type='button' class='password-toggle-btn'
+                        onclick='togglePasswordField("newPassword", this)'
+                        aria-label='Mostrar/ocultar contraseña'>
+                    <svg class="eye-open" viewBox="0 0 24 24">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <svg class="eye-closed" style="display:none;" viewBox="0 0 24 24">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                        <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/>
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                </button>
+            </div>
+
+            <select id='newRol' style='padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel-bg); color: var(--text-main);'>
+                <option value='user'>Usuario</option>
+                <option value='admin'>Administrador</option>
+            </select>
+            <button class='btn btn-success' onclick='createUser()'>➕ Agregar</button>
+        </div>
+
+        <!-- Tabla de usuarios -->
+        <div class="view-table-wrapper" style="max-height: 450px; overflow-y: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 25%;">Usuario</th>
+                        <th style="width: 15%;">Rol</th>
+                        <th id="usersPasswordHeader" style="width: 35%; display: none;">Contraseña</th>
+                        <th style="width: 25%; text-align: center;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                    <tr><td colspan="4" style="text-align: center; padding: 20px; color: var(--text-muted);">Cargando usuarios...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ========== VISTA: HISTORIAL DE CARGAS ========== -->
+<div id="view-history" class="view-container">
+    <div style="background: var(--panel-bg); border-radius: 8px; border: 1px solid var(--border); padding: 20px; margin-top: 24px;">
+        <h2 style="margin-top:0; color: var(--text-main);">🕘 Historial de Cargas</h2>
+        <div class="view-table-wrapper" style="max-height: 500px; overflow-y: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 25%;">Fecha</th>
+                        <th style="width: 35%;">Archivo</th>
+                        <th style="width: 15%;">Filas</th>
+                        <th style="width: 25%;">Estado</th>
+                    </tr>
+                </thead>
+                <tbody id="historyListBody">
+                    <tr><td colspan="4" style="text-align: center; padding: 20px; color: var(--text-muted);">Cargando historial...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- MODALES -->
+<div class='modal-overlay' id='modalOtraOpcion'>
+    <div class='modal-content' style='max-width:450px;'>
+        <div class='modal-header'>
+            <h2 id='modalOtraTitle'>Nueva Opción</h2>
+            <button class='close-button' onclick='handleCloseOtraOpcionModal()'>&times;</button>
+        </div>
+        <div class='form-group'>
+            <label id='modalOtraLabel'>Ingrese el nuevo valor</label>
+            <textarea id='otraOpcionInput' class='form-input' oninput='autoResizeModal(this)'></textarea>
+        </div>
+        <div style='display:flex; gap:12px; margin-top:24px;'>
+            <button class='btn btn-outline' style='flex:1;' onclick='handleCloseOtraOpcionModal()'>Cerrar</button>
+            <button class='btn btn-action' style='flex:1' id='btnConfirmOtra'>Agregar</button>
+        </div>
+    </div>
+</div>
+
+<div class='modal-overlay' id='modalSuggestion'>
+    <div class='modal-content' style='max-width:450px;'>
+        <div class='modal-header'>
+            <h2 style='margin:0;'>Sugerencia de valor</h2>
+            <button class='close-button' onclick='closeModal("modalSuggestion")'>&times;</button>
+        </div>
+        <p id='suggestionMessage'></p>
+        <div style='display:flex; gap:12px; margin-top:24px;'>
+            <button class='btn btn-outline' style='flex:1;' id='btnDeclineSuggestion'>Usar mi valor</button>
+            <button class='btn btn-action' style='flex:1' id='btnAcceptSuggestion'>Usar sugerencia</button>
+        </div>
+    </div>
+</div>
+
+<div class='modal-overlay' id='modalConfirmUpload'>
+    <div class='modal-content draggable'>
+        <div class='modal-header'>
+            <h2>Subir archivo CSV</h2>
+            <button class='close-button' onclick='cancelCsvModal()'>&times;</button>
+        </div>
+        <div>
+            <ol class='steps'>
+                <li>Elige tu archivo CSV</li>
+                <li>Revisa la vista previa</li>
+                <li>Confirma la carga</li>
+            </ol>
+            <p style="color:var(--text-muted); font-size:0.9em;">Columnas esperadas: <code>Proceso, Eje, Tema, Nombre, Cobertura, Periodicidad, Liga Web, Fuente, Año, Estado, Valor</code>. Si falta alguna, se deja vacía. Las filas que ya existen se marcan como <b>duplicadas</b> y tú decides si las sobrescribes.</p>
+            <div class='file-input-wrapper'>
+                <label class='custom-file-upload'>
+                    <input type='file' id='csvFileInputModal' accept='.csv' onchange='handleFileUploadModal(this)'>
+                    Seleccionar archivo CSV
+                </label>
+            </div>
+            <div id='uploadProgress' style='display:none; margin-top:10px;'>
+                <div class='progress-bar'>
+                    <div id='uploadProgressFill' class='progress-bar-fill' style='width:0%;'></div>
+                </div>
+                <span id='uploadProgressText'>Procesando...</span>
+            </div>
+            <div id='csvPreviewControls' style='display:none; margin-top:10px;'>
+                <div style='margin-bottom:10px;'>
+                    <input type='checkbox' id='selectAllDuplicatesForOverwrite' onchange='updateSelectAllCheckbox("uploadDataPreview", false, true)'>
+                    <label for='selectAllDuplicatesForOverwrite'>Sobrescribir todos los duplicados (sin marcar = se omiten)</label>
+                </div>
+                <div style='margin-bottom:10px;'>
+                    <input type='checkbox' id='selectAllNonDuplicates' onchange='toggleAllNonDuplicates(this, false)'>
+                    <label for='selectAllNonDuplicates'>Marcar todas las filas nuevas</label>
+                </div>
+                <div id='csvNewCatalogMessage' style='display:none; background:#fff3cd; padding:8px; border:1px solid #ffc107; border-radius:4px; margin-bottom:10px;'>⚠️ Se detectaron valores nuevos en los catálogos. Se insertarán al confirmar la carga.</div>
+            </div>
+            <div id='uploadPreviewMessages' style='display:none; max-height:120px; overflow-y:auto; margin-top:10px;'></div>
+            <div id='uploadDataPreview' style='display:none; margin-top:15px;'></div>
+            <div id='paginationControls' style='display:none; justify-content:center; gap:10px; margin-top:10px;'>
+                <button class='btn btn-outline' id='prevPageBtn' disabled>Anterior</button>
+                <span>
+                    Página <input type='number' id='previewPageInput' value='1' min='1' style="width:56px; padding:4px; text-align:center; border:1px solid var(--border); border-radius:4px;">
+                    de <span id='previewTotalPages'>1</span>
+                </span>
+                <button class='btn btn-outline' id='nextPageBtn' disabled>Siguiente</button>
+            </div>
+            <div style='display:flex; gap:12px; margin-top:24px;'>
+                <button class='btn btn-danger' style='flex:1;' onclick='cancelCsvModal()'>Cancelar</button>
+                <button class='btn btn-success' style='flex:1' id='confirmUploadBtn' onclick='confirmUpload()' disabled>✓ Confirmar Carga</button>
+            </div>
+        </div>
+        <div class="resize-handle-corner"></div>
+    </div>
+</div>
+
+<div class='modal-overlay' id='modalFolderUpload'>
+    <div class='modal-content draggable'>
+        <div class='modal-header'>
+            <div style='display:flex; align-items:center; gap:12px; flex-wrap:wrap;'>
+                <div class='flow-nav-buttons' id='flowNavButtonsFolder' style='display:none;'>
+                    <button id='flowBackBtnFolder' type='button' onclick='navigateFlowBack()' title='Atrás' aria-label='Atrás'>←</button>
+                    <button id='flowForwardBtnFolder' type='button' onclick='navigateFlowForward()' title='Adelante' aria-label='Adelante'>→</button>
+                </div>
+                <h2 style='margin:0;'>Subir carpeta ZIP</h2>
+            </div>
+            <button class='close-button' onclick='cancelFolderModal()'>&times;</button>
+        </div>
+        <div>
+            <ol class='steps'>
+                <li>Elige el ZIP</li>
+                <li>Marca las variables que quieres</li>
+                <li>Revisa y confirma</li>
+            </ol>
+            
+            <p style="color:var(--text-muted); font-size:0.9em;">💡 También puedes <strong>arrastrar el ZIP</strong> directamente sobre esta ventana o sobre la tabla principal.</p>
+            <div class='file-input-wrapper'>
+                <label class='custom-file-upload'>
+                    <input type='file' id='zipFileInput' accept='.zip' onchange='handleZipUpload(this)'>
+                    Seleccionar archivo ZIP
+                </label>
+            </div>
+            <div id='zipProgress' style='display:none; margin-top:10px;'>
+                <div class='progress-bar'>
+                    <div id='zipProgressFill' class='progress-bar-fill' style='width:0%;'></div>
+                </div>
+                <span id='zipProgressText'>Procesando...</span>
+            </div>
+            <div id='zipPollingErrorBanner'>
+                <span id='zipPollingErrorInfo'>⚠️ Se perdió conexión con el servidor.</span>
+                <button class='btn btn-action' onclick='resumeTaskPolling()'>🔄 Reanudar</button>
+            </div>
+            <div id='folderLogMessages' style='max-height:250px; overflow-y:auto; background:#f8f9fa; padding:10px; border-radius:6px; border:1px solid var(--border); margin-top:10px; display:none;'>
+
+                <pre id='folderLogContent' style='margin:0; font-size:0.85em; white-space:pre-wrap; word-break:break-word;'></pre>
+            </div>
+            <div id='zipPreviewContainer' style='display:none; margin-top:20px;'>
+                <h3>Vista previa</h3>
+                <p style='font-size:0.85em; color:var(--danger); font-weight:500;'>Las filas en rosa ya existen (duplicadas). Las demás se agregarán como nuevas.</p>
+                <div style='margin-bottom:10px;'>
+                    <input type='checkbox' id='selectAllDuplicatesForOverwriteZip' onchange='updateSelectAllCheckbox("zipPreviewTable", true, true)'>
+                    <label for='selectAllDuplicatesForOverwriteZip'>Sobrescribir todos los duplicados (sin marcar = se omiten)</label>
+                </div>
+                <div style='margin-bottom:10px;'>
+                    <input type='checkbox' id='selectAllNonDuplicatesForOverwriteZip' onchange='toggleAllNonDuplicates(this, true)'>
+                    <label for='selectAllNonDuplicatesForOverwriteZip'>Marcar todas las filas nuevas</label>
+                </div>
+                <div id='zipNewCatalogMessage' style='display:none; background:#fff3cd; padding:8px; border:1px solid #ffc107; border-radius:4px; margin-bottom:10px;'>⚠️ Se detectaron valores nuevos en los catálogos. Se insertarán al confirmar la carga.</div>
+                <p>Filas a agregar: <span id='rowCount'></span></p>
+                <div id='zipPreviewTable'></div>
+                <div id='zipPaginationControls' style='display:none; justify-content:center; gap:10px; margin-top:10px;'>
+                    <button class='btn btn-outline' id='zipPrevPageBtn' disabled>Anterior</button>
+                    <span>
+                        Página <input type='number' id='zipPageInput' value='1' min='1' style="width:56px; padding:4px; text-align:center; border:1px solid var(--border); border-radius:4px;">
+                        de <span id='zipTotalPages'>1</span>
+                    </span>
+                    <button class='btn btn-outline' id='zipNextPageBtn' disabled>Siguiente</button>
+                </div>
+            </div>
+            <div style='display:flex; gap:12px; margin-top:24px;'>
+                <button class='btn btn-danger' style='flex:1;' onclick='cancelFolderModal()'>Cancelar</button>
+                <button class='btn btn-success' style='flex:1;' id='confirmFolderBtn' onclick='confirmFolderUpload()' disabled>✓ Confirmar seleccionadas</button>
+            </div>
+        </div>
+        <div class="resize-handle-corner"></div>
+    </div>
+</div>
+
+<div class='modal-overlay' id='modalDiscoverVariables'>
+    <div class='modal-content draggable' style='max-width:1000px;'>
+        <div class='modal-header'>
+            <div style='display:flex; align-items:center; gap:12px; flex-wrap:wrap;'>
+                <div class='flow-nav-buttons' id='flowNavButtonsDiscovery' style='display:none;'>
+                    <button id='flowBackBtnDiscovery' type='button' onclick='navigateFlowBack()' title='Atrás' aria-label='Atrás'>←</button>
+                    <button id='flowForwardBtnDiscovery' type='button' onclick='navigateFlowForward()' title='Adelante' aria-label='Adelante'>→</button>
+                </div>
+                <h2 style='margin:0;'>¿Qué variables quieres importar?</h2>
+            </div>
+            <button class='close-button' onclick='cancelDiscoveryModal()'>&times;</button>
+        </div>
+        <div>
+            <div id='discoverySummary' style='margin-bottom:12px; color:var(--text-muted);'></div>
+            <div style='margin-bottom:10px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;'>
+                <button class='btn btn-outline' onclick='discoverySelectAllAggregations(true)'>✅ Marcar las recomendadas</button>
+                <button class='btn btn-outline' onclick='discoverySelectAllAggregations(false)'>❌ Quitar todas</button>
+                <span id='discoverySelectedCount' style='font-size:0.9em; color:var(--text-muted);'></span>
+            </div>
+            <div id='discoveryList' style='max-height:55vh; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:12px;'></div>
+            <div style='display:flex; gap:12px; margin-top:18px;'>
+                <button class='btn btn-danger' style='flex:1;' onclick='cancelDiscoveryModal()'>Cancelar</button>
+                <button class='btn btn-success' style='flex:1;' id='btnConfirmDiscovery' onclick='confirmDiscoveryAndProcess()'>✓ Continuar con las marcadas</button>
+            </div>
+        </div>
+        <div class="resize-handle-corner"></div>
+    </div>
+</div>
+
+<!-- Modal: cambiar la PROPIA contraseña -->
+<div class='modal-overlay' id='modalChangeOwnPassword'>
+    <div class='modal-content' style='max-width:460px;'>
+        <div class='modal-header'>
+            <h2>Cambiar mi contraseña</h2>
+            <button class='close-button' onclick='closeModal("modalChangeOwnPassword")'>&times;</button>
+        </div>
+        <div class='form-group'>
+            <label for='ownNewPassword'>Nueva contraseña (mínimo 6 caracteres)</label>
+            <div class="password-field-wrapper">
+                <input type='password' id='ownNewPassword' class='form-input' placeholder='••••••••' autocomplete='new-password'>
+                <button type='button' class='password-toggle-btn'
+                        onclick='togglePasswordField("ownNewPassword", this)'
+                        aria-label='Mostrar/ocultar contraseña'>
+                    <svg class="eye-open" viewBox="0 0 24 24">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <svg class="eye-closed" style="display:none;" viewBox="0 0 24 24">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                        <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/>
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class='form-group'>
+            <label for='ownConfirmPassword'>Confirmar contraseña</label>
+            <div class="password-field-wrapper">
+                <input type='password' id='ownConfirmPassword' class='form-input' placeholder='••••••••' autocomplete='new-password'>
+                <button type='button' class='password-toggle-btn'
+                        onclick='togglePasswordField("ownConfirmPassword", this)'
+                        aria-label='Mostrar/ocultar contraseña'>
+                    <svg class="eye-open" viewBox="0 0 24 24">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <svg class="eye-closed" style="display:none;" viewBox="0 0 24 24">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                        <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/>
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div style='display:flex; gap:12px; margin-top:24px;'>
+            <button class='btn btn-outline' style='flex:1;' onclick='closeModal("modalChangeOwnPassword")'>Cancelar</button>
+            <button class='btn btn-success' style='flex:1;' id='btnConfirmOwnPassword' onclick='confirmChangeOwnPassword()'>Guardar</button>
+        </div>
+    </div>
+</div>
+
+<div id='toast-container'></div>
+<div id="loadingSpinner" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.7); z-index:9999; justify-content:center; align-items:center;">
+    <div style="background:white; padding:20px 40px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15); display:flex; align-items:center; gap:12px;">
+        <div class="spinner-border" role="status" style="width:2rem; height:2rem; border:4px solid var(--frambuesa); border-top-color:transparent; border-radius:50%; animation: spin 0.8s linear infinite;"></div>
+        <span>Cargando datos...</span>
+    </div>
+</div>
+<style>
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner-border {
+        display: inline-block;
+        width: 2rem;
+        height: 2rem;
+        vertical-align: text-bottom;
+        border: 4px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: spinner-border 0.75s linear infinite;
+    }
+    @keyframes spinner-border { to { transform: rotate(360deg); } }
+</style>
+
+    <script src="/static/js/icons.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
