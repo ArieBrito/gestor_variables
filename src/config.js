@@ -8,16 +8,31 @@ export const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)
 const truthy = (v, def = false) => (v === undefined || v === '' ? def : ['1', 'true', 'yes', 'on'].includes(String(v).toLowerCase()));
 
 export const NODE_ENV = process.env.NODE_ENV || 'development';
+export const IS_PROD = NODE_ENV === 'production';
 export const DEBUG = truthy(process.env.DEBUG, NODE_ENV !== 'production');
 export const DISABLE_AUTH = truthy(process.env.DISABLE_AUTH, false);
 export const PORT = parseInt(process.env.PORT || process.env.FLASK_PORT || '8000', 10);
-export const PORT_SCAN_RANGE = 100;
+export const PORT_SCAN_RANGE = IS_PROD ? 1 : 100; // en producción no se salta a otro puerto
+export const HOST = process.env.HOST || '0.0.0.0';
+// Detrás de un proxy inverso (nginx, IIS, balanceador): número de saltos o 'true'. Necesario para cookies seguras.
+export const TRUST_PROXY = process.env.TRUST_PROXY || '';
+// Cookie de sesión con flag Secure (requiere HTTPS). Por defecto: activa en producción.
+export const COOKIE_SECURE = truthy(process.env.COOKIE_SECURE, IS_PROD);
+// Contraseña inicial del admin cuando la tabla usuarios está vacía.
+export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 export const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim();
 export const SUPABASE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '').trim();
 export const USING_SERVICE_ROLE = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
 export const NGROK_AUTH_TOKEN = (process.env.NGROK_AUTH_TOKEN || '').trim();
 export const SESSION_SECRET = process.env.SESSION_SECRET || '';
+
+if (IS_PROD) {
+  const problems = [];
+  if (DISABLE_AUTH) problems.push('DISABLE_AUTH=true no está permitido en producción');
+  if (SESSION_SECRET.length < 32) problems.push('SESSION_SECRET es obligatorio en producción (mín. 32 caracteres)');
+  if (problems.length) throw new Error(`❌ Configuración de producción inválida: ${problems.join('; ')}`);
+}
 
 // Parámetros de negocio (idénticos al notebook)
 export const CACHE_TTL = 60; // segundos

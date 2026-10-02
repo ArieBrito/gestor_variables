@@ -1,6 +1,6 @@
 // Autenticación: usuarios en Supabase, hashes compatibles con Werkzeug (scrypt / pbkdf2).
 import crypto from 'node:crypto';
-import { DISABLE_AUTH, logger } from './config.js';
+import { ADMIN_PASSWORD, DISABLE_AUTH, IS_PROD, logger } from './config.js';
 import { must, supabase } from './db.js';
 
 const SCRYPT_N = 32768;
@@ -81,10 +81,13 @@ export async function ensureAdminUser() {
   try {
     const { count } = await must(supabase.from('usuarios').select('id', { count: 'exact', head: true }));
     if (count === 0) {
-      await must(
-        supabase.from('usuarios').insert({ username: 'admin', password_hash: await generatePasswordHash('admin123'), rol: 'admin' })
-      );
-      logger.info('✅ Usuario administrador creado: admin / admin123 (cámbiala).');
+      if (IS_PROD && !ADMIN_PASSWORD) {
+        logger.error('❌ No hay usuarios y falta ADMIN_PASSWORD en .env: no se crea el admin por defecto en producción.');
+        return;
+      }
+      const pw = ADMIN_PASSWORD || 'admin123';
+      await must(supabase.from('usuarios').insert({ username: 'admin', password_hash: await generatePasswordHash(pw), rol: 'admin' }));
+      logger.info(ADMIN_PASSWORD ? '✅ Usuario administrador creado: admin (contraseña de ADMIN_PASSWORD).' : '✅ Usuario administrador creado: admin / admin123 (cámbiala).');
     }
   } catch (e) {
     logger.error(`❌ Error al verificar/crear usuario admin: ${e.message}`);

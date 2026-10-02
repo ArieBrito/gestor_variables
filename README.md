@@ -33,8 +33,22 @@ iniciar.bat            # Windows  · o  ./iniciar.sh en Linux/macOS/Git Bash
 | `PORT` | Puerto preferido (si está ocupado busca el siguiente libre) |
 | `DEBUG` | `true`: logs detallados, trazas en errores JSON, plantillas sin caché |
 | `DISABLE_AUTH` | `true`: sin login (todos son admin) |
-| `SESSION_SECRET` | Opcional: mantiene las sesiones entre reinicios |
+| `SESSION_SECRET` | **Obligatorio en producción** (≥32 caracteres): mantiene las sesiones entre reinicios |
+| `SUPABASE_ACCESS_TOKEN` | Opcional: `db:setup` vía Management API |
+| `NODE_ENV` | `production` activa las validaciones de arranque y desactiva el escaneo de puertos |
+| `HOST` | Interfaz de escucha (por defecto `0.0.0.0`) |
+| `COOKIE_SECURE` | `true` si se sirve por HTTPS (cookie Secure + HSTS). Por defecto `true` en producción |
+| `TRUST_PROXY` | Saltos de proxy inverso (p. ej. `1` con nginx) |
+| `ADMIN_PASSWORD` | Contraseña del admin inicial (obligatoria en producción si `usuarios` está vacía) |
 | `NGROK_AUTH_TOKEN` | Opcional: túnel público |
+
+## Producción
+
+1. Copia `.env.example` a `.env` y completa credenciales; `NODE_ENV=production`, `DEBUG=false`, `SESSION_SECRET` largo.
+2. Con `NODE_ENV=production` el servidor **no arranca** si `DISABLE_AUTH=true` o falta `SESSION_SECRET`.
+3. `npm ci --omit=dev && npm start` (usa un supervisor: pm2, systemd o Docker; el proceso sale con código 1 ante errores no capturados).
+4. Detrás de HTTPS/proxy: `COOKIE_SECURE=true` y `TRUST_PROXY=1`.
+5. Healthcheck: `GET /healthz`. Login limitado a 10 intentos fallidos / 15 min por IP.
 
 ## Base de datos
 

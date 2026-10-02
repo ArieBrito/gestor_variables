@@ -23,18 +23,37 @@ router.get('/login', (req, res) => {
   return res.type('html').send(readView('login.html').replace('<!--ERROR-->', ''));
 });
 
+// Límite de intentos de login por IP (en memoria): 10 fallos / 15 min
+const WINDOW_MS = 15 * 60 * 1000;
+const MAX_FAILS = 10;
+const fails = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, f] of fails) if (now - f.t > WINDOW_MS) fails.delete(ip);
+}, WINDOW_MS).unref();
+const blocked = (ip) => {
+  const f = fails.get(ip);
+  return f && Date.now() - f.t < WINDOW_MS && f.n >= MAX_FAILS;
+};
+
 router.post('/login', async (req, res) => {
   if (DISABLE_AUTH) return res.redirect('/');
+  if (blocked(req.ip)) {
+    return res.status(429).type('html').send(readView('login.html').replace('<!--ERROR-->', '<div class="error-message">Demasiados intentos. Intenta de nuevo más tarde.</div>'));
+  }
   const { username = '', password = '' } = req.body || {};
   const user = await findUserByUsername(String(username));
   if (user && (await checkPasswordHash(user.password_hash, String(password)))) {
     return req.session.regenerate((err) => {
       if (err) return res.status(500).send('Error de sesión');
+      fails.delete(req.ip);
       req.session.userId = user.id;
       logger.info(`🔓 Inicio de sesión: ${user.username}`);
       return req.session.save(() => res.redirect('/'));
     });
   }
+  const f = fails.get(req.ip);
+  fails.set(req.ip, { n: (f && Date.now() - f.t < WINDOW_MS ? f.n : 0) + 1, t: Date.now() });
   logger.warn(`🔒 Intento de inicio de sesión fallido para '${String(username).slice(0, 40)}'`);
   return res
     .type('html')

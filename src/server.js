@@ -6,7 +6,8 @@ import compression from 'compression';
 import express from 'express';
 import session from 'express-session';
 import {
-  DEBUG, DISABLE_AUTH, NGROK_AUTH_TOKEN, NODE_ENV, PORT, PORT_SCAN_RANGE, ROOT_DIR, SESSION_SECRET, USING_SERVICE_ROLE, logger,
+  COOKIE_SECURE, DEBUG, DISABLE_AUTH, HOST, IS_PROD, NGROK_AUTH_TOKEN, NODE_ENV, PORT, PORT_SCAN_RANGE, ROOT_DIR, SESSION_SECRET, TRUST_PROXY,
+  USING_SERVICE_ROLE, logger,
 } from './config.js';
 import { ensureAdminUser, loadUser } from './auth.js';
 import { loadAllCatalogs } from './catalogs.js';
@@ -17,8 +18,26 @@ import { router as pagesRoutes } from './routes/pages.js';
 import { router as uploadRoutes } from './routes/uploads.js';
 import { router as variableRoutes } from './routes/variables.js';
 
+if (!IS_PROD && !SESSION_SECRET) logger.warn('SESSION_SECRET no definido: las sesiones se pierden al reiniciar.');
+
 const app = express();
 app.disable('x-powered-by');
+if (TRUST_PROXY) app.set('trust proxy', /^\d+$/.test(TRUST_PROXY) ? Number(TRUST_PROXY) : TRUST_PROXY === 'true' ? true : TRUST_PROXY);
+
+// Cabeceras de seguridad básicas
+app.use((_req, res, next) => {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Referrer-Policy': 'same-origin',
+    ...(IS_PROD && COOKIE_SECURE ? { 'Strict-Transport-Security': 'max-age=15552000' } : {}),
+  });
+  next();
+});
+
+// Healthcheck para balanceadores / monitoreo (sin sesión ni acceso a BD)
+app.get('/healthz', (_req, res) => res.json({ status: 'ok', uptime: Math.round(process.uptime()) }));
+
 app.use(compression());
 app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
@@ -29,7 +48,7 @@ app.use(
     secret: SESSION_SECRET || crypto.randomBytes(24).toString('hex'),
     resave: false,
     saveUninitialized: false,
-    cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 12 },
+    cookie: { httpOnly: true, sameSite: 'lax', secure: COOKIE_SECURE, maxAge: 1000 * 60 * 60 * 12 },
   })
 );
 
@@ -101,23 +120,29 @@ async function main() {
   await refreshCaches(true).catch((e) => logger.warn(`Caché inicial no disponible: ${e.message}`));
 
   const port = await findAvailablePort(PORT);
-  const server = app.listen(port, '0.0.0.0', async () => {
+  const server = app.listen(port, HOST, async () => {
     const url = await startNgrok(port);
     const line = '='.repeat(70);
     console.log(`\n${line}\n✅ APP LISTA${url ? '' : ' (solo local)'}\n${line}`);
     if (url) console.log(`🌐 PÚBLICA (ngrok) : ${url}`);
     console.log(`🖥️  LOCAL           : http://127.0.0.1:${port}\n${line}\n`);
   });
+  server.requestTimeout = 10 * 60 * 1000; // cargas ZIP grandes
   const shutdown = (sig) => {
     logger.info(`Recibido ${sig}, cerrando...`);
     server.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 3000).unref();
+    server.closeIdleConnections?.();
+    setTimeout(() => process.exit(0), 10000).unref();
   };
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 process.on('unhandledRejection', (e) => logger.error(`unhandledRejection: ${e?.stack || e}`));
+process.on('uncaughtException', (e) => {
+  logger.error(`uncaughtException: ${e?.stack || e}`);
+  process.exit(1); // que el supervisor (pm2/systemd/docker) reinicie el proceso
+});
 
 main().catch((e) => {
   logger.error(`❌ No se pudo iniciar: ${e.stack || e.message}`);
