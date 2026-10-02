@@ -1,5 +1,6 @@
 // Configuración global: variables de entorno + logger (modo debug).
 import 'dotenv/config';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -43,7 +44,9 @@ export const TASK_TTL_HARD = 3600;
 export const ZIP_SESSION_TTL = 1800;
 export const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
 
-export const MODELS_DIR = path.join(ROOT_DIR, 'modelos');
+export const IS_SERVERLESS = Boolean(process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME);
+// En serverless solo /tmp es escribible (y es efímero).
+export const MODELS_DIR = IS_SERVERLESS ? path.join(os.tmpdir(), 'modelos') : path.join(ROOT_DIR, 'modelos');
 export const MODEL_PATHS = {
   proceso: path.join(MODELS_DIR, 'modelo_proceso.json'),
   eje: path.join(MODELS_DIR, 'modelo_eje.json'),

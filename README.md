@@ -50,6 +50,17 @@ iniciar.bat            # Windows  · o  ./iniciar.sh en Linux/macOS/Git Bash
 4. Detrás de HTTPS/proxy: `COOKIE_SECURE=true` y `TRUST_PROXY=1`.
 5. Healthcheck: `GET /healthz`. Login limitado a 10 intentos fallidos / 15 min por IP.
 
+## Despliegue en Netlify
+
+`netlify.toml` publica `public/` en el CDN y envía el resto a una función (`netlify/functions/server.mjs`) que envuelve la app Express.
+`requirements.txt` se movió a `legacy/` para que Netlify no intente instalar Python/pandas (ese error de build era del notebook).
+
+1. Sube el repo y conecta el sitio (build: sin comando; publish: `public`).
+2. En *Site configuration → Environment variables* define: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_SECRET` (≥32), `ADMIN_PASSWORD` (solo primer arranque). El `.env` no se sube a Netlify.
+3. Crea las tablas una vez desde tu equipo: `npm run db:setup`.
+
+**Limitaciones de serverless:** cuerpo máx. ~6 MB por petición y 26 s por invocación, así que las cargas ZIP/CSV grandes y el procesamiento asíncrono con progreso (estado en memoria) no son fiables; el reentrenamiento de modelos ML escribe en `/tmp` (se pierde). Para cargas masivas usa el servidor Node (`npm start`) en una VM, Render, Railway o Fly.io.
+
 ## Base de datos
 
 `db/schema.sql` crea `variables` (jerarquía `parent_id`), `usuarios`, `cargas` y los catálogos

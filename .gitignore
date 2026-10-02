@@ -6,3 +6,4 @@ modelos/
 .deps_installed
 venv/
 __pycache__/
+.netlify/

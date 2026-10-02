@@ -44,13 +44,10 @@ router.post('/login', async (req, res) => {
   const { username = '', password = '' } = req.body || {};
   const user = await findUserByUsername(String(username));
   if (user && (await checkPasswordHash(user.password_hash, String(password)))) {
-    return req.session.regenerate((err) => {
-      if (err) return res.status(500).send('Error de sesión');
-      fails.delete(req.ip);
-      req.session.userId = user.id;
-      logger.info(`🔓 Inicio de sesión: ${user.username}`);
-      return req.session.save(() => res.redirect('/'));
-    });
+    fails.delete(req.ip);
+    req.session = { userId: user.id };
+    logger.info(`🔓 Inicio de sesión: ${user.username}`);
+    return res.redirect('/');
   }
   const f = fails.get(req.ip);
   fails.set(req.ip, { n: (f && Date.now() - f.t < WINDOW_MS ? f.n : 0) + 1, t: Date.now() });
@@ -61,7 +58,8 @@ router.post('/login', async (req, res) => {
 });
 
 router.get('/logout', (req, res) => {
-  req.session.destroy(() => res.redirect('/login'));
+  req.session = null;
+  res.redirect('/login');
 });
 
 router.get('/', loginRequired, async (_req, res) => {

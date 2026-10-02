@@ -1,0 +1,32 @@
+# Netlify: estáticos desde public/, todo lo demás a la función Express.
+[build]
+  publish = "public"
+  command = "echo 'sin build'"
+
+[build.environment]
+  NODE_VERSION = "22"
+  NODE_ENV = "production"
+  COOKIE_SECURE = "true"
+  TRUST_PROXY = "1"
+  DEBUG = "false"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+  external_node_modules = ["@ngrok/ngrok"]
+  included_files = ["views/**", "src/**"]
+
+[functions."server"]
+  timeout = 26
+
+# /static/* se sirve directamente desde public/ (CDN)
+[[redirects]]
+  from = "/static/*"
+  to = "/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/server"
+  status = 200
+  force = true
